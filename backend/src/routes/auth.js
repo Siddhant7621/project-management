@@ -1,6 +1,7 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
+import { authenticate } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -70,6 +71,19 @@ router.post('/login', async (req, res) => {
         email: user.email,
         name: user.name
       }
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// Get current user
+router.get('/me', authenticate ,async (req, res) => {
+  try {
+    res.json({
+      id: req.user._id,
+      email: req.user.email,
+      name: req.user.name
     });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });

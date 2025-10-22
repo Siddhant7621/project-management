@@ -1,7 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { yupResolver } from '@hookform/resolvers/yup';
+import * as Yup from 'yup';
 import api from '../utils/api';
 import type { Project } from '../types';
+import toast from 'react-hot-toast';
 
 interface TaskFormData {
   title: string;
@@ -11,45 +15,58 @@ interface TaskFormData {
   project: string;
 }
 
+// Validation schema
+const schema = Yup.object().shape({
+  title: Yup.string().required('Title is required').min(3, 'Title must be at least 3 characters'),
+  description: Yup.string().max(500, 'Description cannot exceed 500 characters'),
+  status: Yup.string().oneOf(['todo', 'in-progress', 'done'], 'Invalid status').required(),
+  project: Yup.string().required('Project is required'),
+  dueDate: Yup.date().nullable().notRequired(),
+});
+
 const TaskForm: React.FC = () => {
   const { id, projectId } = useParams<{ id: string; projectId: string }>();
   const navigate = useNavigate();
-  const [formData, setFormData] = useState<TaskFormData>({
-    title: '',
-    description: '',
-    status: 'todo',
-    dueDate: '',
-    project: projectId || '',
-  });
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
   const isEditing = Boolean(id);
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<TaskFormData>({
+    resolver: yupResolver(schema),
+    defaultValues: {
+      title: '',
+      description: '',
+      status: 'todo',
+      dueDate: '',
+      project: projectId || '',
+    },
+  });
 
   useEffect(() => {
     fetchProjects();
-    if (isEditing) {
-      fetchTask();
-    }
+    if (isEditing) fetchTask();
   }, [id]);
 
   const fetchProjects = async () => {
     try {
       const response = await api.get('/projects');
       setProjects(response.data);
-    } catch (error) {
-      setError('Failed to fetch projects');
+    } catch {
+      toast.error('Failed to fetch projects');
     }
   };
 
   const fetchTask = async () => {
     try {
-      // We need to get the task details - you might need to adjust this endpoint
       const response = await api.get(`/tasks/project/${projectId}`);
       const task = response.data.find((t: any) => t._id === id);
       if (task) {
-        setFormData({
+        reset({
           title: task.title,
           description: task.description,
           status: task.status,
@@ -57,94 +74,83 @@ const TaskForm: React.FC = () => {
           project: task.project,
         });
       }
-    } catch (error) {
-      setError('Failed to fetch task');
+    } catch {
+      toast.error('Failed to fetch task');
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSubmit = async (data: TaskFormData) => {
     setLoading(true);
-    setError('');
-
     try {
       if (isEditing) {
-        await api.put(`/tasks/${id}`, formData);
+        await api.put(`/tasks/${id}`, data);
+        toast.success('Task updated successfully!');
       } else {
-        await api.post('/tasks', formData);
+        await api.post('/tasks', data);
+        toast.success('Task created successfully!');
       }
-      navigate(`/projects/${formData.project}`);
+      navigate(`/projects/${data.project}`);
     } catch (error: any) {
-      setError(error.response?.data?.message || 'Failed to save task');
+      toast.error(error.response?.data?.message || 'Failed to save task');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
   return (
-    <div className="min-h-screen bg-gray-100 py-8">
+    <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-2xl mx-auto px-4">
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h1 className="text-2xl font-bold mb-6">
+        <div className="bg-white rounded-xl shadow-md p-8 border border-gray-100">
+          <h1 className="text-3xl font-semibold mb-6 text-gray-800">
             {isEditing ? 'Edit Task' : 'Create New Task'}
           </h1>
 
-          {error && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-              {error}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+            {/* Title */}
             <div>
-              <label htmlFor="title" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">
                 Title *
               </label>
               <input
                 type="text"
                 id="title"
-                name="title"
-                required
-                value={formData.title}
-                onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                {...register('title')}
+                className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition
+                  ${errors.title ? 'border-red-500' : 'border-gray-300'}`}
+                placeholder="Enter task title"
               />
+              {errors.title && <p className="text-red-500 text-sm mt-1">{errors.title.message}</p>}
             </div>
 
+            {/* Description */}
             <div>
-              <label htmlFor="description" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
                 Description
               </label>
               <textarea
                 id="description"
-                name="description"
+                {...register('description')}
                 rows={4}
-                value={formData.description}
-                onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="Write a short description about the task..."
+                className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition
+                  ${errors.description ? 'border-red-500' : 'border-gray-300'}`}
               />
+              {errors.description && (
+                <p className="text-red-500 text-sm mt-1">{errors.description.message}</p>
+              )}
             </div>
 
+            {/* Project */}
             <div>
-              <label htmlFor="project" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="project" className="block text-sm font-medium text-gray-700 mb-1">
                 Project *
               </label>
               <select
                 id="project"
-                name="project"
-                required
-                value={formData.project}
-                onChange={handleChange}
+                {...register('project')}
                 disabled={Boolean(projectId)}
-                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100"
+                className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition
+                  ${errors.project ? 'border-red-500' : 'border-gray-300'} ${projectId ? 'bg-gray-100' : ''}`}
               >
                 <option value="">Select a project</option>
                 {projects.map(project => (
@@ -153,51 +159,57 @@ const TaskForm: React.FC = () => {
                   </option>
                 ))}
               </select>
+              {errors.project && <p className="text-red-500 text-sm mt-1">{errors.project.message}</p>}
             </div>
 
+            {/* Status */}
             <div>
-              <label htmlFor="status" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
                 Status
               </label>
               <select
                 id="status"
-                name="status"
-                value={formData.status}
-                onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                {...register('status')}
+                className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition
+                  ${errors.status ? 'border-red-500' : 'border-gray-300'}`}
               >
                 <option value="todo">To Do</option>
                 <option value="in-progress">In Progress</option>
                 <option value="done">Done</option>
               </select>
+              {errors.status && <p className="text-red-500 text-sm mt-1">{errors.status.message}</p>}
             </div>
 
+            {/* Due Date */}
             <div>
-              <label htmlFor="dueDate" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="dueDate" className="block text-sm font-medium text-gray-700 mb-1">
                 Due Date
               </label>
               <input
                 type="date"
                 id="dueDate"
-                name="dueDate"
-                value={formData.dueDate}
-                onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                {...register('dueDate')}
+                className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition
+                  ${errors.dueDate ? 'border-red-500' : 'border-gray-300'}`}
               />
+              {errors.dueDate && <p className="text-red-500 text-sm mt-1">{errors.dueDate.message}</p>}
             </div>
 
-            <div className="flex justify-end space-x-4 pt-4">
+            {/* Buttons */}
+            <div className="flex justify-end space-x-4 pt-6">
               <button
                 type="button"
-                onClick={() => navigate(formData.project ? `/projects/${formData.project}` : '/dashboard')}
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                onClick={() =>
+                  navigate(projectId ? `/projects/${projectId}` : '/dashboard')
+                }
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={loading}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
+                className="px-5 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition disabled:opacity-60"
               >
                 {loading ? 'Saving...' : isEditing ? 'Update Task' : 'Create Task'}
               </button>

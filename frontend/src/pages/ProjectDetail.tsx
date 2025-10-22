@@ -87,7 +87,7 @@ const ProjectDetail: React.FC = () => {
         </div>
 
         {/* Task Filter */}
-        <div className="flex justify-between items-center mb-4">
+        <div className="flex justify-between items-center mb-4 px-3 sm:px-0">
           <h2 className="text-2xl font-semibold text-gray-900">Tasks</h2>
           <select
             value={filter}
@@ -105,7 +105,7 @@ const ProjectDetail: React.FC = () => {
         {tasks.length === 0 ? (
           <p className="text-gray-500 text-center py-8">No tasks yet. Add your first task!</p>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 px-3 sm:px-0">
             {tasks.map(task => (
               <div key={task._id} className="bg-white rounded-2xl shadow-md p-5 hover:shadow-xl transition hover:scale-[1.02]">
                 <div className="flex justify-between items-start">
